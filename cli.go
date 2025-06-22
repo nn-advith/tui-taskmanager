@@ -140,7 +140,24 @@ func main() {
 			}
 
 		case "4":
-			fmt.Println("Deleting task")
+			fmt.Println("delete> Enter ID of task to delete")
+			fmt.Print("delete >")
+			delId, _ := reader.ReadString('\n')
+			delId = strings.TrimSpace(delId)
+			delIdInt, _ := strconv.Atoi(delId)
+
+			{
+				var updatedSlice []task.Task
+
+				for i := range taskList {
+					if delIdInt != taskList[i].ReturnID() {
+						updatedSlice = append(updatedSlice, taskList[i])
+					}
+				}
+
+				taskList = updatedSlice
+			}
+			fmt.Println("delete> Done")
 		case "h":
 			usage()
 		case "q":
