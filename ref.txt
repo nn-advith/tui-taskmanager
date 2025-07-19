@@ -21,3 +21,10 @@ https://www.xfree86.org/4.8.0/ctlseqs.html
 ^[[34m - blue
 
 Italic: ^[[3m
+
+hide cursor: ^[[?25l
+show cursor: ^[[?25h
+
+all of these can be used in bash :
+
+echo -e "\033[31mhello\033[0m"
