@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"golang.org/x/term"
 )
@@ -14,6 +15,12 @@ import (
 // sqlite3 integration with unique id
 // cleanly remove scrollback; hide render changes
 // figure out warping
+// multiple tasks open
+
+type Task struct {
+	Name        string
+	Description string
+}
 
 func main() {
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
@@ -25,7 +32,7 @@ func main() {
 		fmt.Print("\r")
 	}()
 
-	tasks := []string{"Task numero uno", "Task numero dos", "Task numero tres"}
+	tasks := []Task{Task{Name: "Task Numero Uno", Description: "Description Uno"}, Task{Name: "Task Numero Dos", Description: "Description Dos"}, Task{Name: "Task Numero Tres", Description: "Description Tres"}}
 	selected := 0
 	entered := -1
 	buf := make([]byte, 3)
@@ -46,8 +53,10 @@ func main() {
 		case buf[0] == 'a' || buf[0] == 'A':
 			// try to move to some function
 
-			newtaskname := readInput()
-			addTask(&tasks, newtaskname)
+			newtask := readInput()
+
+			addTask(&tasks, newtask)
+
 		case buf[0] == 13 || buf[0] == 10:
 			if entered == -1 {
 				entered = selected
@@ -92,57 +101,96 @@ func main() {
 
 }
 
-func readInput() string {
+func readInput() Task {
+
 	var input []byte
 	buf := make([]byte, 1)
 	fmt.Print("\r\n\033[?25h\033[?12hNew task: ")
-	for {
+	var newTask Task
+	namedone := false
+	descdone := false
+	for !namedone {
 		_, err := os.Stdin.Read(buf)
 		if err != nil {
 			break
 		}
 		switch buf[0] {
 		case 13, 10:
-			return string(input)
+			// return string(input)
+			newTask.Name = string(input)
+			namedone = true
 		case 127, 8:
 			if len(input) > 0 {
 				input = input[:len(input)-1]
 				fmt.Print("\b \b")
 			}
 		case 27:
-			return ""
+			// return ""
+			newTask = Task{}
+			namedone = true
+			descdone = true
 		default:
 			input = append(input, buf[0])
 			fmt.Printf("%c", buf[0])
 		}
 	}
 
-	return string(input)
+	input = []byte{}
+	fmt.Print("\r\n\033[?25h\033[?12hDescription: ")
+	for !descdone {
+		_, err := os.Stdin.Read(buf)
+		if err != nil {
+			break
+		}
+		switch buf[0] {
+		case 13, 10:
+			// return string(input)
+			newTask.Description = string(input)
+			descdone = true
+		case 127, 8:
+			if len(input) > 0 {
+				input = input[:len(input)-1]
+				fmt.Print("\b \b")
+			}
+		case 27:
+			// return ""
+			newTask = Task{}
+			descdone = true
+		default:
+			input = append(input, buf[0])
+			fmt.Printf("%c", buf[0])
+		}
+	}
+
+	return newTask
+
 }
 
 func printHeader() {
-	fmt.Print("\r\033[47m\033[30mTask Manager v9000\033[30m            17-Aug-2025\033[0m")
+	fmt.Print("\r\033[47m\033[30mTask Manager v9000\033[30m            " + getDate() + "\033[0m")
 	fmt.Print("\r\n\n")
 }
 
-func printTasks(tasks []string, selected int, entered int) {
+func printTasks(tasks []Task, selected int, entered int) {
 
 	if len(tasks) == 0 {
 		fmt.Print("\r\033[3m  All tasks done <=w=>\033[0m")
 	}
+
 	for i, task := range tasks {
 		prefix := "  "
+		ntask := task.Name
 		if i == selected {
 			prefix = "> "
 		}
 		if i == entered {
 			prefix = "> "
-			task = task + "\r\n   \u251C\u2500 Description: \033[3mSome random description\033[0m"
-			task = task + "\r\n   \u2502"
-			task = task + "\r\n   \u2514\u2500 \033[34m[E]\033[0m Edit   \033[31m[D]\033[0m Delete"
+			ntask = ntask + "\r\n   \u251C\u2500 Description: \033[3m" + task.Description + "\033[0m"
+			ntask = ntask + "\r\n   \u2502"
+			ntask = ntask + "\r\n   \u2514\u2500 \033[34m[E]\033[0m Edit   \033[31m[D]\033[0m Delete"
 			// task = task + "\r\n   \u251C\u2500 [D] Delete"
 		}
-		fmt.Printf("\r%s%s\n", prefix, task)
+		fmt.Printf("\r%s%s\n", prefix, ntask)
 	}
 }
 
@@ -151,10 +199,14 @@ func printCommands() {
 	fmt.Print("\033[47m\033[32m[A]\033[30m Add task    \033[31m[Q]\033[30m  Quit                \033[0m")
 }
 
-func addTask(tasks *[]string, newTask string) {
+func addTask(tasks *[]Task, newTask Task) {
 	// show new input for task
 	// take imput
-	if len(newTask) > 0 {
+	if len(newTask.Name) > 0 {
 		*tasks = append(*tasks, newTask)
 	}
+}
+
+func getDate() string {
+	return time.Now().Format("02-Jan-2006")
 }
