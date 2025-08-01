@@ -32,7 +32,7 @@ func main() {
 		fmt.Print("\r")
 	}()
 
-	tasks := []Task{Task{Name: "Task Numero Uno", Description: "Description Uno"}, Task{Name: "Task Numero Dos", Description: "Description Dos"}, Task{Name: "Task Numero Tres", Description: "Description Tres"}}
+	tasks := []Task{{Name: "Task Numero Uno", Description: "Description Uno"}, {Name: "Task Numero Dos", Description: "Description Dos"}, {Name: "Task Numero Tres", Description: "Description Tres"}}
 	selected := 0
 	entered := -1
 	buf := make([]byte, 3)
