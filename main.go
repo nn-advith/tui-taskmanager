@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 // multiple tasks open
 
 type Task struct {
+	ID          string
 	Name        string
 	Description string
 }
@@ -32,7 +34,7 @@ func main() {
 		fmt.Print("\r")
 	}()
 
-	tasks := []Task{{Name: "Task Numero Uno", Description: "Description Uno"}, {Name: "Task Numero Dos", Description: "Description Dos"}, {Name: "Task Numero Tres", Description: "Description Tres"}}
+	tasks := []Task{{ID: idGen(), Name: "Task Numero Uno", Description: "Description Uno"}, {ID: idGen(), Name: "Task Numero Dos", Description: "Description Dos"}, {ID: idGen(), Name: "Task Numero Tres", Description: "Description Tres"}}
 	selected := 0
 	entered := -1
 	buf := make([]byte, 3)
@@ -82,23 +84,67 @@ func main() {
 		case buf[0] == 'e' || buf[0] == 'E':
 			if entered != -1 {
 				// TODO: edit selected here
+				// call edit task function here
+				updatedTask := getUpdatedTask(tasks[selected])
+				editTask(&tasks, updatedTask)
 
 			}
 		case buf[0] == 'd' || buf[0] == 'D':
 			if entered != -1 {
 				// delete selected here
 				// TODO: get confirmation here
-				if selected == len(tasks)-1 {
-					selected = 0
+
+				doit := getConfirmation()
+				if doit {
+
+					if selected == len(tasks)-1 {
+						selected = 0
+					}
+					tasks = append(tasks[:selected], tasks[selected+1:]...)
+					entered = -1
+				} else {
+					// fmt.Print("\r\n\033[?12hAborted.")
+					// check how to do this
 				}
-				tasks = append(tasks[:selected], tasks[selected+1:]...)
-				entered = -1
 				//rotate
 			}
 		}
 
 	}
 
+}
+
+func getConfirmation() bool {
+	var input []byte
+	buf := make([]byte, 1)
+	fmt.Print("\r\n\033[?25h\033[?12hConfirm Delete [\033[32mY\033[0m/\033[31mother\033[0m]: ")
+	for {
+		_, err := os.Stdin.Read(buf)
+		if err != nil {
+			break
+		}
+		switch buf[0] {
+		case 13, 10:
+			// return string(input)
+			if string(input) == "Y" {
+				return true
+			}
+			return false
+
+		case 127, 8:
+			if len(input) > 0 {
+				input = input[:len(input)-1]
+				fmt.Print("\b \b")
+			}
+		case 27:
+			// return ""
+			return false
+		default:
+			input = append(input, buf[0])
+			fmt.Printf("%c", buf[0])
+		}
+	}
+	return false
 }
 
 func readInput() Task {
@@ -185,6 +231,7 @@ func printTasks(tasks []Task, selected int, entered int) {
 		}
 		if i == entered {
 			prefix = "> "
+			// ntask = ntask + "\r\n   \u251C\u2500 Id: \033[3m" + task.ID + "\033[0m"
 			ntask = ntask + "\r\n   \u251C\u2500 Description: \033[3m" + task.Description + "\033[0m"
 			ntask = ntask + "\r\n   \u2502"
 			ntask = ntask + "\r\n   \u2514\u2500 \033[34m[E]\033[0m Edit   \033[31m[D]\033[0m Delete"
@@ -202,11 +249,93 @@ func printCommands() {
 func addTask(tasks *[]Task, newTask Task) {
 	// show new input for task
 	// take imput
-	if len(newTask.Name) > 0 {
-		*tasks = append(*tasks, newTask)
+	nt := newTask
+	nt.ID = idGen()
+	if len(nt.Name) > 0 {
+		*tasks = append(*tasks, nt)
 	}
 }
 
+func editTask(tasks *[]Task, updatedTask Task) {
+	for i := range *tasks {
+		if (*tasks)[i].ID == updatedTask.ID {
+			(*tasks)[i] = updatedTask
+		}
+	}
+}
+
+// func editTask(tas)
+
 func getDate() string {
 	return time.Now().Format("02-Jan-2006")
+}
+
+func idGen() string {
+	return fmt.Sprintf("%d-%d", rand.Intn(0x100000), time.Now().UnixMilli())
+}
+
+func getUpdatedTask(task Task) Task {
+
+	input := []byte(task.Name)
+	buf := make([]byte, 1)
+	fmt.Print("\r\n\033[?25h\033[?12hUpdated task name: " + string(input))
+	var newTask Task
+	newTask.ID = task.ID
+
+	namedone := false
+	descdone := false
+	for !namedone {
+		_, err := os.Stdin.Read(buf)
+		if err != nil {
+			break
+		}
+		switch buf[0] {
+		case 13, 10:
+			// return string(input)
+			newTask.Name = string(input)
+			namedone = true
+		case 127, 8:
+			if len(input) > 0 {
+				input = input[:len(input)-1]
+				fmt.Print("\b \b")
+			}
+		case 27:
+			// return ""
+			newTask = Task{}
+			namedone = true
+			// descdone = true
+		default:
+			input = append(input, buf[0])
+			fmt.Printf("%c", buf[0])
+		}
+	}
+
+	input = []byte(task.Description)
+	fmt.Print("\r\n\033[?25h\033[?12hUpdated Description: " + string(input))
+	for !descdone {
+		_, err := os.Stdin.Read(buf)
+		if err != nil {
+			break
+		}
+		switch buf[0] {
+		case 13, 10:
+			// return string(input)
+			newTask.Description = string(input)
+			descdone = true
+		case 127, 8:
+			if len(input) > 0 {
+				input = input[:len(input)-1]
+				fmt.Print("\b \b")
+			}
+		case 27:
+			// return ""
+			newTask = Task{}
+			descdone = true
+		default:
+			input = append(input, buf[0])
+			fmt.Printf("%c", buf[0])
+		}
+	}
+
+	return newTask
 }
