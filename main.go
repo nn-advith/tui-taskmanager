@@ -1,22 +1,24 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"math/rand"
 	"os"
 	"time"
 
 	"golang.org/x/term"
+	_ "modernc.org/sqlite"
 )
 
 // TODO-Ception:
-// verify edge case when tasks is nil
-// delete confirmation in a new prompt
-// edit task section
-// sqlite3 integration with unique id
-// cleanly remove scrollback; hide render changes
-// figure out warping
-// multiple tasks open
+// verify edge case when tasks is nil -- done
+// delete confirmation in a new prompt -- done
+// edit task section -- done
+// sqlite3 integration with unique id --  done
+// cleanly remove scrollback; hide render changes -- done
+// figure out warping -- ????
+// multiple tasks open -- maintain an array of entered tasks
 
 type Task struct {
 	ID          string
@@ -24,7 +26,56 @@ type Task struct {
 	Description string
 }
 
+func clearScreen() {
+	fmt.Print("\033[2J\033[3J\033[H")
+	// clear current sccreen, remove scrollback and set cursor to (1,1)
+}
+
+func printLog(msg string) {
+	fmt.Print("\r\n\033[33m[LOG]: \033[0m " + msg)
+}
+
+// db related function only in this section.
+
+func getTasks(db *sql.DB) []Task {
+	rows, err := db.Query(`SELECT id, name, description FROM tasks`)
+	if err != nil {
+		printLog("error reading from db") // this doesnt work. do something here; for notifications in TUI
+		return []Task{}
+	}
+	var tasks []Task
+	for rows.Next() {
+		var id string
+		var name string
+		var description string
+		if err := rows.Scan(&id, &name, &description); err != nil {
+			printLog("error reading row")
+		}
+		t := Task{ID: id, Name: name, Description: description}
+		tasks = append(tasks, t)
+	}
+	return tasks
+}
+
 func main() {
+
+	// open sqlite db file
+	db, err := sql.Open("sqlite", "file:db/tasks.db")
+	if err != nil {
+		printLog("unable to open db")
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS tasks (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		description TEXT
+	)`)
+	if err != nil {
+		printLog("error during table creation")
+	}
+
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
 		panic(err)
@@ -34,7 +85,10 @@ func main() {
 		fmt.Print("\r")
 	}()
 
-	tasks := []Task{{ID: idGen(), Name: "Task Numero Uno", Description: "Description Uno"}, {ID: idGen(), Name: "Task Numero Dos", Description: "Description Dos"}, {ID: idGen(), Name: "Task Numero Tres", Description: "Description Tres"}}
+	// tasks := []Task{{ID: idGen(), Name: "Task Numero Uno", Description: "Description Uno"}, {ID: idGen(), Name: "Task Numero Dos", Description: "Description Dos"}, {ID: idGen(), Name: "Task Numero Tres", Description: "Description Tres"}}
+	// tasks := []Task{} // replace this with db read
+	tasks := getTasks(db)
+
 	selected := 0
 	entered := -1
 	buf := make([]byte, 3)
@@ -42,8 +96,8 @@ func main() {
 		for i := range buf {
 			buf[i] = 0
 		}
-		// fmt.Print("\033[3J")       // remove scrollback
-		fmt.Print("\033[2J\033[H") // clear screen ; not optimal but eh
+		clearScreen()
+
 		printHeader()
 		printTasks(tasks, selected, entered)
 		printCommands()
@@ -57,16 +111,19 @@ func main() {
 
 			newtask := readInput()
 
-			addTask(&tasks, newtask)
+			addTask(db, newtask)
+
+			tasks = getTasks(db)
 
 		case buf[0] == 13 || buf[0] == 10:
 			if entered == -1 {
 				entered = selected
 			} else {
-				entered = -1
+				collapse(&entered)
+
 			}
 		case buf[0] == 27 && buf[1] == 91:
-			entered = -1
+			collapse(&entered)
 			switch buf[2] {
 			case 65:
 				if len(tasks) > 0 {
@@ -79,14 +136,15 @@ func main() {
 
 			}
 		case buf[0] == 27:
-			entered = -1
+			collapse(&entered)
 
 		case buf[0] == 'e' || buf[0] == 'E':
 			if entered != -1 {
 				// TODO: edit selected here
 				// call edit task function here
 				updatedTask := getUpdatedTask(tasks[selected])
-				editTask(&tasks, updatedTask)
+				editTask(db, updatedTask)
+				tasks = getTasks(db)
 
 			}
 		case buf[0] == 'd' || buf[0] == 'D':
@@ -97,13 +155,11 @@ func main() {
 				doit := getConfirmation()
 				if doit {
 
-					if selected == len(tasks)-1 {
-						selected = 0
-					}
-					tasks = append(tasks[:selected], tasks[selected+1:]...)
-					entered = -1
+					deleteTask(db, tasks[selected].ID)
+					collapse(&entered)
+					tasks = getTasks(db)
 				} else {
-					// fmt.Print("\r\n\033[?12hAborted.")
+					fmt.Print("\r\n\nAborted.")
 					// check how to do this
 				}
 				//rotate
@@ -112,6 +168,10 @@ func main() {
 
 	}
 
+}
+
+func collapse(entered *int) {
+	*entered = -1
 }
 
 func getConfirmation() bool {
@@ -126,7 +186,7 @@ func getConfirmation() bool {
 		switch buf[0] {
 		case 13, 10:
 			// return string(input)
-			if string(input) == "Y" {
+			if string(input) == "Y" || string(input) == "y" {
 				return true
 			}
 			return false
@@ -145,6 +205,14 @@ func getConfirmation() bool {
 		}
 	}
 	return false
+}
+
+func deleteTask(db *sql.DB, id string) {
+	_, err := db.Exec(`DELETE FROM tasks WHERE id = ?`, id)
+	if err != nil {
+		printLog("delete error")
+	}
+
 }
 
 func readInput() Task {
@@ -220,7 +288,7 @@ func printHeader() {
 func printTasks(tasks []Task, selected int, entered int) {
 
 	if len(tasks) == 0 {
-		fmt.Print("\r\033[3m  All tasks done <=w=>\033[0m")
+		fmt.Print("\r\033[3m  No pending tasks \033[0m^_^")
 	}
 
 	for i, task := range tasks {
@@ -246,22 +314,29 @@ func printCommands() {
 	fmt.Print("\033[47m\033[32m[A]\033[30m Add task    \033[31m[Q]\033[30m  Quit                \033[0m")
 }
 
-func addTask(tasks *[]Task, newTask Task) {
+func addTask(db *sql.DB, newTask Task) {
 	// show new input for task
 	// take imput
 	nt := newTask
 	nt.ID = idGen()
-	if len(nt.Name) > 0 {
-		*tasks = append(*tasks, nt)
-	}
-}
 
-func editTask(tasks *[]Task, updatedTask Task) {
-	for i := range *tasks {
-		if (*tasks)[i].ID == updatedTask.ID {
-			(*tasks)[i] = updatedTask
+	if len(nt.Name) > 0 {
+
+		_, err := db.Exec(`INSERT INTO tasks (id, name, description) VALUES (?,?, ?)`, nt.ID, nt.Name, nt.Description)
+		if err != nil {
+			printLog("error during insert") // no working :(
 		}
 	}
+
+}
+
+func editTask(db *sql.DB, updatedTask Task) {
+
+	_, err := db.Exec(`UPDATE tasks SET name = ?, description = ? WHERE id = ?`, updatedTask.Name, updatedTask.Description, updatedTask.ID)
+	if err != nil {
+		printLog("update error")
+	}
+
 }
 
 // func editTask(tas)
