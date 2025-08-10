@@ -35,8 +35,6 @@ func printLog(msg string) {
 	fmt.Print("\r\n\033[33m[LOG]: \033[0m " + msg)
 }
 
-// db related function only in this section.
-
 func getTasks(db *sql.DB) []Task {
 	rows, err := db.Query(`SELECT id, name, description FROM tasks`)
 	if err != nil {
@@ -286,6 +284,8 @@ func printHeader() {
 }
 
 func printTasks(tasks []Task, selected int, entered int) {
+
+	// TODO: Warping to be handled here somehow; maintain a width and warp when needed; tree symbols to be clear
 
 	if len(tasks) == 0 {
 		fmt.Print("\r\033[3m  No pending tasks \033[0m^_^")
