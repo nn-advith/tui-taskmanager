@@ -15,6 +15,8 @@ Color codes:
 
 https://www.xfree86.org/4.8.0/ctlseqs.html
 
+^[[0m  - reset
+
 ^[[31m - red
 ^[[32m - green
 ^[[33m - yellow
