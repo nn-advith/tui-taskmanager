@@ -26,15 +26,17 @@ type Task struct {
 	Description string
 }
 
+// screen functions
 func clearScreen() {
 	fmt.Print("\033[2J\033[3J\033[H")
 	// clear current sccreen, remove scrollback and set cursor to (1,1)
 }
 
-func printLog(msg string) {
-	fmt.Print("\r\n\033[33m[LOG]: \033[0m " + msg)
+func collapse(entered *int) {
+	*entered = -1
 }
 
+// task functions
 func getTasks(db *sql.DB) []Task {
 	rows, err := db.Query(`SELECT id, name, description FROM tasks`)
 	if err != nil {
@@ -53,6 +55,253 @@ func getTasks(db *sql.DB) []Task {
 		tasks = append(tasks, t)
 	}
 	return tasks
+}
+
+func deleteTask(db *sql.DB, id string) {
+	_, err := db.Exec(`DELETE FROM tasks WHERE id = ?`, id)
+	if err != nil {
+		printLog("delete error")
+	}
+
+}
+
+func addTask(db *sql.DB, newTask Task) {
+	// show new input for task
+	// take imput
+	nt := newTask
+	nt.ID = idGen()
+
+	if len(nt.Name) > 0 {
+
+		_, err := db.Exec(`INSERT INTO tasks (id, name, description) VALUES (?,?, ?)`, nt.ID, nt.Name, nt.Description)
+		if err != nil {
+			printLog("error during insert") // no working :(
+		}
+	}
+
+}
+
+func editTask(db *sql.DB, updatedTask Task) {
+
+	_, err := db.Exec(`UPDATE tasks SET name = ?, description = ? WHERE id = ?`, updatedTask.Name, updatedTask.Description, updatedTask.ID)
+	if err != nil {
+		printLog("update error")
+	}
+
+}
+
+// utilities
+func printLog(msg string) {
+	fmt.Print("\r\n\033[33m[LOG]: \033[0m " + msg)
+}
+
+func printHeader() {
+	fmt.Print("\r\033[47m\033[30mTask Manager v9000\033[30m            " + getDate() + "\033[0m")
+	fmt.Print("\r\n\n")
+}
+
+func printTasks(tasks []Task, selected int, entered int) {
+
+	// TODO: Warping to be handled here somehow; maintain a width and warp when needed; tree symbols to be clear
+
+	if len(tasks) == 0 {
+		fmt.Print("\r\033[3m  No pending tasks \033[0m^_^")
+	}
+
+	for i, task := range tasks {
+		prefix := "  "
+		ntask := task.Name
+		if i == selected {
+			prefix = "> "
+		}
+		if i == entered {
+			prefix = "> "
+			// ntask = ntask + "\r\n   \u251C\u2500 Id: \033[3m" + task.ID + "\033[0m"
+			ntask = ntask + "\r\n   \u251C\u2500 Description: \033[3m" + task.Description + "\033[0m"
+			ntask = ntask + "\r\n   \u2502"
+			ntask = ntask + "\r\n   \u2514\u2500 \033[34m[E]\033[0m Edit   \033[31m[D]\033[0m Delete"
+			// task = task + "\r\n   \u251C\u2500 [D] Delete"
+		}
+		fmt.Printf("\r%s%s\n", prefix, ntask)
+	}
+}
+
+func printCommands() {
+	fmt.Print("\r\n\n")
+	fmt.Print("\033[47m\033[32m[A]\033[30m Add task    \033[31m[Q]\033[30m  Quit                \033[0m")
+}
+
+func getDate() string {
+	return time.Now().Format("02-Jan-2006")
+}
+
+func idGen() string {
+	return fmt.Sprintf("%d-%d", rand.Intn(0x100000), time.Now().UnixMilli())
+}
+
+// input
+func getConfirmation() bool {
+	var input []byte
+	buf := make([]byte, 1)
+	fmt.Print("\r\n\033[?25h\033[?12hConfirm Delete [\033[32mY\033[0m/\033[31mother\033[0m]: ")
+	for {
+		_, err := os.Stdin.Read(buf)
+		if err != nil {
+			break
+		}
+		switch buf[0] {
+		case 13, 10:
+			// return string(input)
+			if string(input) == "Y" || string(input) == "y" {
+				return true
+			}
+			return false
+
+		case 127, 8:
+			if len(input) > 0 {
+				input = input[:len(input)-1]
+				fmt.Print("\b \b")
+			}
+		case 27:
+			// return ""
+			return false
+		default:
+			input = append(input, buf[0])
+			fmt.Printf("%c", buf[0])
+		}
+	}
+	return false
+}
+
+func readInput() Task {
+
+	var input []byte
+	buf := make([]byte, 1)
+	fmt.Print("\r\n\033[?25h\033[?12hNew task: ")
+	var newTask Task
+	namedone := false
+	descdone := false
+	for !namedone {
+		_, err := os.Stdin.Read(buf)
+		if err != nil {
+			break
+		}
+		switch buf[0] {
+		case 13, 10:
+			// return string(input)
+			newTask.Name = string(input)
+			namedone = true
+		case 127, 8:
+			if len(input) > 0 {
+				input = input[:len(input)-1]
+				fmt.Print("\b \b")
+			}
+		case 27:
+			// return ""
+			newTask = Task{}
+			namedone = true
+			descdone = true
+		default:
+			input = append(input, buf[0])
+			fmt.Printf("%c", buf[0])
+		}
+	}
+
+	input = []byte{}
+	fmt.Print("\r\n\033[?25h\033[?12hDescription: ")
+	for !descdone {
+		_, err := os.Stdin.Read(buf)
+		if err != nil {
+			break
+		}
+		switch buf[0] {
+		case 13, 10:
+			// return string(input)
+			newTask.Description = string(input)
+			descdone = true
+		case 127, 8:
+			if len(input) > 0 {
+				input = input[:len(input)-1]
+				fmt.Print("\b \b")
+			}
+		case 27:
+			// return ""
+			newTask = Task{}
+			descdone = true
+		default:
+			input = append(input, buf[0])
+			fmt.Printf("%c", buf[0])
+		}
+	}
+
+	return newTask
+
+}
+
+func getUpdatedTask(task Task) Task {
+
+	input := []byte(task.Name)
+	buf := make([]byte, 1)
+	fmt.Print("\r\n\033[?25h\033[?12hUpdated task name: " + string(input))
+	var newTask Task
+	newTask.ID = task.ID
+
+	namedone := false
+	descdone := false
+	for !namedone {
+		_, err := os.Stdin.Read(buf)
+		if err != nil {
+			break
+		}
+		switch buf[0] {
+		case 13, 10:
+			// return string(input)
+			newTask.Name = string(input)
+			namedone = true
+		case 127, 8:
+			if len(input) > 0 {
+				input = input[:len(input)-1]
+				fmt.Print("\b \b")
+			}
+		case 27:
+			// return ""
+			newTask = Task{}
+			namedone = true
+			// descdone = true
+		default:
+			input = append(input, buf[0])
+			fmt.Printf("%c", buf[0])
+		}
+	}
+
+	input = []byte(task.Description)
+	fmt.Print("\r\n\033[?25h\033[?12hUpdated Description: " + string(input))
+	for !descdone {
+		_, err := os.Stdin.Read(buf)
+		if err != nil {
+			break
+		}
+		switch buf[0] {
+		case 13, 10:
+			// return string(input)
+			newTask.Description = string(input)
+			descdone = true
+		case 127, 8:
+			if len(input) > 0 {
+				input = input[:len(input)-1]
+				fmt.Print("\b \b")
+			}
+		case 27:
+			// return ""
+			newTask = Task{}
+			descdone = true
+		default:
+			input = append(input, buf[0])
+			fmt.Printf("%c", buf[0])
+		}
+	}
+
+	return newTask
 }
 
 func main() {
@@ -166,251 +415,4 @@ func main() {
 
 	}
 
-}
-
-func collapse(entered *int) {
-	*entered = -1
-}
-
-func getConfirmation() bool {
-	var input []byte
-	buf := make([]byte, 1)
-	fmt.Print("\r\n\033[?25h\033[?12hConfirm Delete [\033[32mY\033[0m/\033[31mother\033[0m]: ")
-	for {
-		_, err := os.Stdin.Read(buf)
-		if err != nil {
-			break
-		}
-		switch buf[0] {
-		case 13, 10:
-			// return string(input)
-			if string(input) == "Y" || string(input) == "y" {
-				return true
-			}
-			return false
-
-		case 127, 8:
-			if len(input) > 0 {
-				input = input[:len(input)-1]
-				fmt.Print("\b \b")
-			}
-		case 27:
-			// return ""
-			return false
-		default:
-			input = append(input, buf[0])
-			fmt.Printf("%c", buf[0])
-		}
-	}
-	return false
-}
-
-func deleteTask(db *sql.DB, id string) {
-	_, err := db.Exec(`DELETE FROM tasks WHERE id = ?`, id)
-	if err != nil {
-		printLog("delete error")
-	}
-
-}
-
-func readInput() Task {
-
-	var input []byte
-	buf := make([]byte, 1)
-	fmt.Print("\r\n\033[?25h\033[?12hNew task: ")
-	var newTask Task
-	namedone := false
-	descdone := false
-	for !namedone {
-		_, err := os.Stdin.Read(buf)
-		if err != nil {
-			break
-		}
-		switch buf[0] {
-		case 13, 10:
-			// return string(input)
-			newTask.Name = string(input)
-			namedone = true
-		case 127, 8:
-			if len(input) > 0 {
-				input = input[:len(input)-1]
-				fmt.Print("\b \b")
-			}
-		case 27:
-			// return ""
-			newTask = Task{}
-			namedone = true
-			descdone = true
-		default:
-			input = append(input, buf[0])
-			fmt.Printf("%c", buf[0])
-		}
-	}
-
-	input = []byte{}
-	fmt.Print("\r\n\033[?25h\033[?12hDescription: ")
-	for !descdone {
-		_, err := os.Stdin.Read(buf)
-		if err != nil {
-			break
-		}
-		switch buf[0] {
-		case 13, 10:
-			// return string(input)
-			newTask.Description = string(input)
-			descdone = true
-		case 127, 8:
-			if len(input) > 0 {
-				input = input[:len(input)-1]
-				fmt.Print("\b \b")
-			}
-		case 27:
-			// return ""
-			newTask = Task{}
-			descdone = true
-		default:
-			input = append(input, buf[0])
-			fmt.Printf("%c", buf[0])
-		}
-	}
-
-	return newTask
-
-}
-
-func printHeader() {
-	fmt.Print("\r\033[47m\033[30mTask Manager v9000\033[30m            " + getDate() + "\033[0m")
-	fmt.Print("\r\n\n")
-}
-
-func printTasks(tasks []Task, selected int, entered int) {
-
-	// TODO: Warping to be handled here somehow; maintain a width and warp when needed; tree symbols to be clear
-
-	if len(tasks) == 0 {
-		fmt.Print("\r\033[3m  No pending tasks \033[0m^_^")
-	}
-
-	for i, task := range tasks {
-		prefix := "  "
-		ntask := task.Name
-		if i == selected {
-			prefix = "> "
-		}
-		if i == entered {
-			prefix = "> "
-			// ntask = ntask + "\r\n   \u251C\u2500 Id: \033[3m" + task.ID + "\033[0m"
-			ntask = ntask + "\r\n   \u251C\u2500 Description: \033[3m" + task.Description + "\033[0m"
-			ntask = ntask + "\r\n   \u2502"
-			ntask = ntask + "\r\n   \u2514\u2500 \033[34m[E]\033[0m Edit   \033[31m[D]\033[0m Delete"
-			// task = task + "\r\n   \u251C\u2500 [D] Delete"
-		}
-		fmt.Printf("\r%s%s\n", prefix, ntask)
-	}
-}
-
-func printCommands() {
-	fmt.Print("\r\n\n")
-	fmt.Print("\033[47m\033[32m[A]\033[30m Add task    \033[31m[Q]\033[30m  Quit                \033[0m")
-}
-
-func addTask(db *sql.DB, newTask Task) {
-	// show new input for task
-	// take imput
-	nt := newTask
-	nt.ID = idGen()
-
-	if len(nt.Name) > 0 {
-
-		_, err := db.Exec(`INSERT INTO tasks (id, name, description) VALUES (?,?, ?)`, nt.ID, nt.Name, nt.Description)
-		if err != nil {
-			printLog("error during insert") // no working :(
-		}
-	}
-
-}
-
-func editTask(db *sql.DB, updatedTask Task) {
-
-	_, err := db.Exec(`UPDATE tasks SET name = ?, description = ? WHERE id = ?`, updatedTask.Name, updatedTask.Description, updatedTask.ID)
-	if err != nil {
-		printLog("update error")
-	}
-
-}
-
-// func editTask(tas)
-
-func getDate() string {
-	return time.Now().Format("02-Jan-2006")
-}
-
-func idGen() string {
-	return fmt.Sprintf("%d-%d", rand.Intn(0x100000), time.Now().UnixMilli())
-}
-
-func getUpdatedTask(task Task) Task {
-
-	input := []byte(task.Name)
-	buf := make([]byte, 1)
-	fmt.Print("\r\n\033[?25h\033[?12hUpdated task name: " + string(input))
-	var newTask Task
-	newTask.ID = task.ID
-
-	namedone := false
-	descdone := false
-	for !namedone {
-		_, err := os.Stdin.Read(buf)
-		if err != nil {
-			break
-		}
-		switch buf[0] {
-		case 13, 10:
-			// return string(input)
-			newTask.Name = string(input)
-			namedone = true
-		case 127, 8:
-			if len(input) > 0 {
-				input = input[:len(input)-1]
-				fmt.Print("\b \b")
-			}
-		case 27:
-			// return ""
-			newTask = Task{}
-			namedone = true
-			// descdone = true
-		default:
-			input = append(input, buf[0])
-			fmt.Printf("%c", buf[0])
-		}
-	}
-
-	input = []byte(task.Description)
-	fmt.Print("\r\n\033[?25h\033[?12hUpdated Description: " + string(input))
-	for !descdone {
-		_, err := os.Stdin.Read(buf)
-		if err != nil {
-			break
-		}
-		switch buf[0] {
-		case 13, 10:
-			// return string(input)
-			newTask.Description = string(input)
-			descdone = true
-		case 127, 8:
-			if len(input) > 0 {
-				input = input[:len(input)-1]
-				fmt.Print("\b \b")
-			}
-		case 27:
-			// return ""
-			newTask = Task{}
-			descdone = true
-		default:
-			input = append(input, buf[0])
-			fmt.Printf("%c", buf[0])
-		}
-	}
-
-	return newTask
 }
