@@ -24,16 +24,15 @@ type Task struct {
 	ID          string
 	Name        string
 	Description string
+	// Entered     bool
 }
+
+var opened map[string]struct{} = map[string]struct{}{}
 
 // screen functions
 func clearScreen() {
 	fmt.Print("\033[2J\033[3J\033[H")
 	// clear current sccreen, remove scrollback and set cursor to (1,1)
-}
-
-func collapse(entered *int) {
-	*entered = -1
 }
 
 // task functions
@@ -100,7 +99,7 @@ func printHeader() {
 	fmt.Print("\r\n\n")
 }
 
-func printTasks(tasks []Task, selected int, entered int) {
+func printTasks(tasks []Task, selected int) {
 
 	// TODO: Warping to be handled here somehow; maintain a width and warp when needed; tree symbols to be clear
 
@@ -114,8 +113,14 @@ func printTasks(tasks []Task, selected int, entered int) {
 		if i == selected {
 			prefix = "> "
 		}
-		if i == entered {
-			prefix = "> "
+		if _, exists := opened[task.ID]; exists {
+			if i == selected {
+				prefix = "> "
+			} else {
+				prefix = "  "
+
+			}
+
 			// ntask = ntask + "\r\n   \u251C\u2500 Id: \033[3m" + task.ID + "\033[0m"
 			ntask = ntask + "\r\n   \u251C\u2500 Description: \033[3m" + task.Description + "\033[0m"
 			ntask = ntask + "\r\n   \u2502"
@@ -337,7 +342,7 @@ func main() {
 	tasks := getTasks(db)
 
 	selected := 0
-	entered := -1
+
 	buf := make([]byte, 3)
 	for {
 		for i := range buf {
@@ -346,7 +351,7 @@ func main() {
 		clearScreen()
 
 		printHeader()
-		printTasks(tasks, selected, entered)
+		printTasks(tasks, selected)
 		printCommands()
 		fmt.Print("\n\r\033[?25l")
 		os.Stdin.Read(buf)
@@ -363,30 +368,34 @@ func main() {
 			tasks = getTasks(db)
 
 		case buf[0] == 13 || buf[0] == 10:
-			if entered == -1 {
-				entered = selected
-			} else {
-				collapse(&entered)
 
+			if _, exists := opened[tasks[selected].ID]; exists {
+				delete(opened, tasks[selected].ID)
+			} else {
+				opened[tasks[selected].ID] = struct{}{}
 			}
-		case buf[0] == 27 && buf[1] == 91:
-			collapse(&entered)
+
+		case buf[0] == 27 && buf[1] == 91: // arrow cases
+
 			switch buf[2] {
-			case 65:
+			case 65: // up
 				if len(tasks) > 0 {
 					selected = (selected - 1 + len(tasks)) % len(tasks)
 				}
-			case 66:
+			case 66: // down
 				if len(tasks) > 0 {
 					selected = (selected + 1) % len(tasks)
 				}
 
 			}
-		case buf[0] == 27:
-			collapse(&entered)
+		case buf[0] == 27: // escape
+			delete(opened, tasks[selected].ID)
+			// tasks[selected].Entered = false
 
 		case buf[0] == 'e' || buf[0] == 'E':
-			if entered != -1 {
+
+			if _, exists := opened[tasks[selected].ID]; exists {
+
 				// TODO: edit selected here
 				// call edit task function here
 				updatedTask := getUpdatedTask(tasks[selected])
@@ -394,8 +403,9 @@ func main() {
 				tasks = getTasks(db)
 
 			}
+
 		case buf[0] == 'd' || buf[0] == 'D':
-			if entered != -1 {
+			if _, exists := opened[tasks[selected].ID]; exists {
 				// delete selected here
 				// TODO: get confirmation here
 
@@ -403,8 +413,11 @@ func main() {
 				if doit {
 
 					deleteTask(db, tasks[selected].ID)
-					collapse(&entered)
+
 					tasks = getTasks(db)
+					if selected > len(tasks)-1 {
+						selected = len(tasks) - 1
+					}
 				} else {
 					fmt.Print("\r\n\nAborted.")
 					// check how to do this
