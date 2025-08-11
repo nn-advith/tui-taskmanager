@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"golang.org/x/exp/constraints"
 	"golang.org/x/term"
 	_ "modernc.org/sqlite"
 )
@@ -17,9 +18,15 @@ import (
 // edit task section -- done
 // sqlite3 integration with unique id --  done
 // cleanly remove scrollback; hide render changes -- done
-// figure out warping -- ????
-// multiple tasks open -- maintain an array of entered tasks
-
+// figure out wrapping -
+//
+//	set max width for description only-
+//	while printing ( before ), check for string length,
+//	if > allowed length
+//		WRAP to next line ( with gap and tree symbol)
+//		print
+//
+// multiple tasks open -- map of opened tasks
 type Task struct {
 	ID          string
 	Name        string
@@ -95,7 +102,7 @@ func printLog(msg string) {
 }
 
 func printHeader() {
-	fmt.Print("\r\033[47m\033[30mTask Manager v9000\033[30m            " + getDate() + "\033[0m")
+	fmt.Print("\r\033[47m\033[30mTask Manager v9000\033[30m                                   " + getDate() + "\033[0m")
 	fmt.Print("\r\n\n")
 }
 
@@ -121,10 +128,36 @@ func printTasks(tasks []Task, selected int) {
 
 			}
 
-			// ntask = ntask + "\r\n   \u251C\u2500 Id: \033[3m" + task.ID + "\033[0m"
-			ntask = ntask + "\r\n   \u251C\u2500 Description: \033[3m" + task.Description + "\033[0m"
-			ntask = ntask + "\r\n   \u2502"
+			// wrapping: split description into lines ( prepend description )
+			maxlength := 50
+
+			newdescription := "Description: " + task.Description
+			var div int
+			if len(newdescription)/maxlength == 0 {
+				div = 1
+			} else {
+				div = len(newdescription) / maxlength
+			}
+
+			chunksize := len(newdescription) / div
+			lines := len(newdescription)/maxlength + 1
+			for i := range lines {
+
+				if i == 0 {
+					ntask = ntask + "\r\n   \u251C\u2500"
+				} else {
+
+					ntask = ntask + "\r\n   \u2502"
+				}
+				ntask = ntask + newdescription[chunksize*i:min(len(newdescription), chunksize*i+chunksize)]
+			}
+			// ntask = ntask + "\r\n   \u2502"
 			ntask = ntask + "\r\n   \u2514\u2500 \033[34m[E]\033[0m Edit   \033[31m[D]\033[0m Delete"
+
+			// ntask = ntask + "\r\n   \u251C\u2500 Id: \033[3m" + task.ID + "\033[0m"
+			// ntask = ntask + "\r\n   \u251C\u2500 Description: \033[3m" + task.Description + "\033[0m"
+			// ntask = ntask + "\r\n   \u2502"
+			// ntask = ntask + "\r\n   \u2514\u2500 \033[34m[E]\033[0m Edit   \033[31m[D]\033[0m Delete"
 			// task = task + "\r\n   \u251C\u2500 [D] Delete"
 		}
 		fmt.Printf("\r%s%s\n", prefix, ntask)
@@ -133,7 +166,7 @@ func printTasks(tasks []Task, selected int) {
 
 func printCommands() {
 	fmt.Print("\r\n\n")
-	fmt.Print("\033[47m\033[32m[A]\033[30m Add task    \033[31m[Q]\033[30m  Quit                \033[0m")
+	fmt.Print("\033[47m\033[32m[A]\033[30m Add task    \033[31m[Q]\033[30m  Quit                                       \033[0m")
 }
 
 func getDate() string {
@@ -142,6 +175,13 @@ func getDate() string {
 
 func idGen() string {
 	return fmt.Sprintf("%d-%d", rand.Intn(0x100000), time.Now().UnixMilli())
+}
+
+func min[T constraints.Ordered](a, b T) T {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // input
@@ -365,14 +405,20 @@ func main() {
 
 			addTask(db, newtask)
 
+			if len(tasks) == 0 {
+				selected = 0
+			}
 			tasks = getTasks(db)
 
 		case buf[0] == 13 || buf[0] == 10:
 
-			if _, exists := opened[tasks[selected].ID]; exists {
-				delete(opened, tasks[selected].ID)
-			} else {
-				opened[tasks[selected].ID] = struct{}{}
+			if len(tasks) != 0 {
+
+				if _, exists := opened[tasks[selected].ID]; exists {
+					delete(opened, tasks[selected].ID)
+				} else {
+					opened[tasks[selected].ID] = struct{}{}
+				}
 			}
 
 		case buf[0] == 27 && buf[1] == 91: // arrow cases
