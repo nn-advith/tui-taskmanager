@@ -102,7 +102,7 @@ func printLog(msg string) {
 }
 
 func printHeader() {
-	fmt.Print("\r\033[47m\033[30mTask Manager v9000\033[30m                                   " + getDate() + "\033[0m")
+	fmt.Print("\r\033[47m\033[30mTask Manager v9000\033[30m                                      " + getDate() + "\033[0m")
 	fmt.Print("\r\n\n")
 }
 
@@ -116,9 +116,9 @@ func printTasks(tasks []Task, selected int) {
 
 	for i, task := range tasks {
 		prefix := "  "
-		ntask := task.Name
+		ntask := "\033[35m" + task.Name + "\033[0m"
 		if i == selected {
-			prefix = "> "
+			prefix = "\033[1m>\033[0m "
 		}
 		if _, exists := opened[task.ID]; exists {
 			if i == selected {
@@ -129,9 +129,9 @@ func printTasks(tasks []Task, selected int) {
 			}
 
 			// wrapping: split description into lines ( prepend description )
-			maxlength := 50
+			maxlength := 40
 
-			newdescription := "Description: " + task.Description
+			newdescription := "\033[3m" + task.Description + "\033[0m"
 			var div int
 			if len(newdescription)/maxlength == 0 {
 				div = 1
@@ -144,10 +144,10 @@ func printTasks(tasks []Task, selected int) {
 			for i := range lines {
 
 				if i == 0 {
-					ntask = ntask + "\r\n   \u251C\u2500"
+					ntask = ntask + "\r\n   \u251C\u2500\033[4mDescription\033[0m: "
 				} else {
 
-					ntask = ntask + "\r\n   \u2502"
+					ntask = ntask + "\r\n   \u2502              "
 				}
 				ntask = ntask + newdescription[chunksize*i:min(len(newdescription), chunksize*i+chunksize)]
 			}
@@ -166,7 +166,7 @@ func printTasks(tasks []Task, selected int) {
 
 func printCommands() {
 	fmt.Print("\r\n\n")
-	fmt.Print("\033[47m\033[32m[A]\033[30m Add task    \033[31m[Q]\033[30m  Quit                                       \033[0m")
+	fmt.Print("\033[47m\033[32m[A]\033[30m Add task    \033[31m[Q]\033[30m  Quit                                          \033[0m")
 }
 
 func getDate() string {
