@@ -9,24 +9,12 @@ import (
 
 	"golang.org/x/exp/constraints"
 	"golang.org/x/term"
+
 	_ "modernc.org/sqlite"
 )
 
 // TODO-Ception:
-// verify edge case when tasks is nil -- done
-// delete confirmation in a new prompt -- done
-// edit task section -- done
-// sqlite3 integration with unique id --  done
-// cleanly remove scrollback; hide render changes -- done
-// figure out wrapping -
-//
-//	set max width for description only-
-//	while printing ( before ), check for string length,
-//	if > allowed length
-//		WRAP to next line ( with gap and tree symbol)
-//		print
-//
-// multiple tasks open -- map of opened tasks
+
 type Task struct {
 	ID          string
 	Name        string
@@ -107,8 +95,6 @@ func printHeader() {
 }
 
 func printTasks(tasks []Task, selected int) {
-
-	// TODO: Warping to be handled here somehow; maintain a width and warp when needed; tree symbols to be clear
 
 	if len(tasks) == 0 {
 		fmt.Print("\r\033[3m  No pending tasks \033[0m^_^")
@@ -218,7 +204,7 @@ func getConfirmation() bool {
 	return false
 }
 
-func readInput() Task {
+func readInput(width int) Task {
 
 	var input []byte
 	buf := make([]byte, 1)
@@ -239,7 +225,13 @@ func readInput() Task {
 		case 127, 8:
 			if len(input) > 0 {
 				input = input[:len(input)-1]
-				fmt.Print("\b \b")
+				if (len(input)+len("New task: "))%width == width-1 {
+					fmt.Printf("\033[A\033[%dC \033[%dD", width, 1)
+					fmt.Print("\033[1C")
+				} else {
+					fmt.Print("\b \b")
+				}
+
 			}
 		case 27:
 			// return ""
@@ -267,7 +259,12 @@ func readInput() Task {
 		case 127, 8:
 			if len(input) > 0 {
 				input = input[:len(input)-1]
-				fmt.Print("\b \b")
+				if (len(input)+len("Description: "))%width == width-1 {
+					fmt.Printf("\033[A\033[%dC \033[%dD", width, 1)
+					fmt.Print("\033[1C")
+				} else {
+					fmt.Print("\b \b")
+				}
 			}
 		case 27:
 			// return ""
@@ -283,7 +280,7 @@ func readInput() Task {
 
 }
 
-func getUpdatedTask(task Task) Task {
+func getUpdatedTask(width int, task Task) Task {
 
 	input := []byte(task.Name)
 	buf := make([]byte, 1)
@@ -306,7 +303,12 @@ func getUpdatedTask(task Task) Task {
 		case 127, 8:
 			if len(input) > 0 {
 				input = input[:len(input)-1]
-				fmt.Print("\b \b")
+				if (len(input)+len("Updated task name: "))%width == width-1 {
+					fmt.Printf("\033[A\033[%dC \033[%dD", width, 1)
+					fmt.Print("\033[1C")
+				} else {
+					fmt.Print("\b \b")
+				}
 			}
 		case 27:
 			// return ""
@@ -334,7 +336,12 @@ func getUpdatedTask(task Task) Task {
 		case 127, 8:
 			if len(input) > 0 {
 				input = input[:len(input)-1]
-				fmt.Print("\b \b")
+				if (len(input)+len("Updated Description: "))%width == width-1 {
+					fmt.Printf("\033[A\033[%dC \033[%dD", width, 1)
+					fmt.Print("\033[1C")
+				} else {
+					fmt.Print("\b \b")
+				}
 			}
 		case 27:
 			// return ""
@@ -377,6 +384,8 @@ func main() {
 		fmt.Print("\r")
 	}()
 
+	width, _, _ := term.GetSize(int(os.Stderr.Fd()))
+
 	// tasks := []Task{{ID: idGen(), Name: "Task Numero Uno", Description: "Description Uno"}, {ID: idGen(), Name: "Task Numero Dos", Description: "Description Dos"}, {ID: idGen(), Name: "Task Numero Tres", Description: "Description Tres"}}
 	// tasks := []Task{} // replace this with db read
 	tasks := getTasks(db)
@@ -401,7 +410,7 @@ func main() {
 		case buf[0] == 'a' || buf[0] == 'A':
 			// try to move to some function
 
-			newtask := readInput()
+			newtask := readInput(width)
 
 			addTask(db, newtask)
 
@@ -444,7 +453,7 @@ func main() {
 
 				// TODO: edit selected here
 				// call edit task function here
-				updatedTask := getUpdatedTask(tasks[selected])
+				updatedTask := getUpdatedTask(width, tasks[selected])
 				editTask(db, updatedTask)
 				tasks = getTasks(db)
 
