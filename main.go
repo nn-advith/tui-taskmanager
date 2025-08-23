@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"time"
 
 	"golang.org/x/exp/constraints"
@@ -359,7 +360,21 @@ func getUpdatedTask(width int, task Task) Task {
 func main() {
 
 	// open sqlite db file
-	db, err := sql.Open("sqlite", "file:db/tasks.db")
+	// sqlite db in
+	//
+
+	HOME, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Println("error getting home directory; exiting")
+		os.Exit(1)
+	}
+	if err := os.MkdirAll(filepath.Join(HOME, ".db"), 0755); err != nil {
+		printLog("failed to create db directory")
+		os.Exit(1)
+	}
+
+	dbpath := filepath.Join(HOME, ".db", "tasks.db")
+	db, err := sql.Open("sqlite", "file:"+dbpath)
 	if err != nil {
 		printLog("unable to open db")
 		os.Exit(1)
