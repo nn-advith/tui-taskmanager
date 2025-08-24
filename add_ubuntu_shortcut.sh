@@ -4,7 +4,7 @@ DEFAULT_BINDING=${1:-"N"}
 CUSTOM_SHORTCUTS=$(gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings)
 # last=$(echo ${CUSTOM_SHORTCUTS} | grep -o "'[^']*'" | tail -n1 | tr -d "'" | grep -oE "custom[0-9]+" | grep -oE "[0-9]+")
 # next=$(( ${last} + 1))
-if $1; then
+if [ -z "$1" ]; then
     echo -e "Using default binding \033[32m<Ctrl><Alt>N\033[0m"
 else
     echo -e "Using custom binding \033[32m<Ctrl><Alt>$1\033[0m"
