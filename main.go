@@ -374,6 +374,7 @@ func main() {
 	}
 
 	dbpath := filepath.Join(HOME, ".db", "tasks.db")
+	// db, err := sql.Open("sqlite", "file:db/tasks.db")
 	db, err := sql.Open("sqlite", "file:"+dbpath)
 	if err != nil {
 		printLog("unable to open db")
